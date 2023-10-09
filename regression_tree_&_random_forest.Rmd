@@ -1,0 +1,296 @@
+---
+title: "R Notebook - Regression Tree & Random Forest"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+```{r}
+# I'm not using this in an academic level or for commercial purposes. 
+# This code is only to demonstrate programming technics.
+# This code was written by me (@diguitarrista) and was inspired by 
+# a project from my class about Decisions Trees and Random Forest.
+
+# Using algorithms of trees and random forest we will analyze a model that indicates
+# The response variable here is the MEDV, which is the median value of the property
+# the median value of a property given the characteristics of the region
+```
+
+```{r}
+# 0) Installation of packages
+pacotes <- c('tidyverse',  
+             'viridis',
+             'rpart',      
+             'rpart.plot', 
+             'gtools',     
+             'Rmisc',      
+             'scales',     
+             'caret',      
+             'neuralnet',
+             'shapr',
+             'gamlss',
+             'gamlss.add',
+             'mlbench',
+             'reshape'
+             
+)
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+```
+
+```{r}
+# Loading the Housing database
+data(BostonHousing)
+# View the first lines of the database
+head(BostonHousing)
+# Data dimension
+dim(BostonHousing)
+
+# Function to evaluate the tree
+evaluation <- function(p_var, y_var){
+  n <- length(y_var)
+  SQE <- sum((y_var - p_var)^2)
+  QME <- SQE/n
+  
+  # Calculation of SSE (Sum of Squares Total)
+  SST <- sum((y_var - mean(y_var, na.rm=TRUE))**2)
+  QMT <- SST/n
+  
+  # R-squared calculation
+  R_squared <- 1 - SQE/SST
+  
+  # Printing the results
+  cat("SQE: ", SQE, "QME : ", QME, "\n")
+  cat("SST: ", SST, "QMT: ", QMT, "\n")
+  cat("R-quadrado: ", R_squared, "\n")
+  
+  return(R_squared)
+}
+```
+
+## 1) Split training, validation and testing samples
+```{r}
+# Sort, from 1 to 3 for each line where:
+# 1 - indicates that the line will participate in the training base
+# 2 - indicates that the row participates in the validation base
+# 3 - indicates that the line participates in the test base
+
+set.seed(123)
+separation <- sample(c('Training', 'Validation', 'Test'),
+                    size = nrow(BostonHousing),
+                    replace = TRUE,
+                    prob=c(0.6, 0.2, 0.2))
+
+# Checking the draws
+table(separation)
+```
+
+```{r}
+# Generating training, validation and test bases
+train <- BostonHousing[separation == 'Training',]
+nrow(train)
+validation <- BostonHousing[separation == 'Validation',]
+nrow(validation)
+test <- BostonHousing[separation == 'Test',]
+nrow(test)
+```
+
+## 2) First model option - tree
+
+```{r}
+# 2.0 - first tree version (depth = 2)
+set.seed(123)
+tree0 <- rpart::rpart(medv~., 
+                        data=train,
+                        control=rpart.control(maxdepth = 2, cp=0))
+paleta <- scales::viridis_pal(begin=.75, end=1)(20)
+
+# View the tree
+plot <- rpart.plot::rpart.plot(tree0,
+                               box.palette = paleta)
+
+rsquared_tree0_train <- evaluation(predict(tree0, train), train$medv)
+rsquared_tree0_validation <- evaluation(predict(tree0, validation), validation$medv)
+```
+
+
+```{r}
+# 2.1 - second tree version, slightly larger
+tree1 <- rpart::rpart(medv~., 
+                        data=train,
+                        control=rpart.control(maxdepth = 3, cp=0))
+
+# View the tree
+plot <- rpart.plot::rpart.plot(tree1,
+                               box.palette = paleta) 
+
+rsquared_tree1_train <- evaluation(predict(tree0, train), train$medv)
+rsquared_tree1_validation <- evaluation(predict(tree0, validation), validation$medv)
+```
+
+```{r}
+# 2.2 - third tree version
+set.seed(123)
+tree2 <- rpart::rpart(medv~., 
+                        data=train,
+                        control=rpart.control(maxdepth = 4, cp=0))
+
+# View the tree
+plot <- rpart.plot::rpart.plot(tree2,
+                               box.palette = paleta) # Paleta de cores
+
+rsquared_tree2_train <- evaluation(predict(tree0, train), train$medv)
+rsquared_tree2_validation <- evaluation(predict(tree0, validation), validation$medv)
+```
+
+```{r}
+# 2.3 - fourth tree version
+set.seed(123)
+tree3 <- rpart::rpart(medv~., 
+                        data=train,
+                        control=rpart.control(maxdepth = 5, cp=0))
+
+# View the tree
+plot <- rpart.plot::rpart.plot(tree3,
+                               box.palette = paleta) # Paleta de cores
+
+rsquared_tree3_train <- evaluation(predict(tree0, train), train$medv)
+rsquared_tree3_validation <- evaluation(predict(tree0, validation), validation$medv)
+```
+
+## Table of the tree's R²
+```{r}
+rsquared_compared_trees <- data.frame(
+  Models = c("R² Tree 0", "R² Tree 1", "R² Tree 2", "R² Tree 3"),
+  R_squared_train = c(rsquared_tree0_train, rsquared_tree1_train, 
+                      rsquared_tree2_train, rsquared_tree3_test),
+  R_squared_validation = c(rsquared_tree0_validation, rsquared_tree1_validation, 
+                      rsquared_tree2_validation, rsquared_tree3_validation)
+  
+)
+# Printing the R² trees table
+print(rsquared_compared_trees)
+```
+
+```{r}
+## Let's keep this last tree and evaluate on test base
+rsquared_tree3_test <- evaluation(predict(tree3, test), test$medv)
+```
+
+```{r}
+# 2.4 - Let's improve the base with a better CP using k-fold
+# Add train and validation bases K-fold will already validate for us
+train_combined <- rbind(train, validation)
+```
+
+```{r}
+# 2.5 - Running a very large tree
+# let's use the max-depth as 30 which is the maximum
+# let's use CP = 0, which gives the largest possible tree
+
+set.seed(123)
+huge_tree <- rpart::rpart(medv~., 
+                              data=train_combined,
+                              control=rpart.control(maxdepth = 30, 
+                                                    cp=0,
+                                                    xval=10))
+
+
+# This command gives us all possible complexity costs
+# and related cross-validation errors (using k-fold)
+tab_cp <- rpart::printcp(huge_tree)
+# Graphical view of CP vs error in cross validation
+rpart::plotcp(huge_tree)
+```
+
+```{r}
+# The best CP in the Cross Validation
+cp_min <- tab_cp[which.min(tab_cp[,'xerror']),'CP']
+cp_min
+```
+
+```{r}
+# Running the best tree
+set.seed(123)
+best_tree <- rpart::rpart(medv~., 
+                              data=train_combined,
+                              control=rpart.control(maxdepth = 30, 
+                                                    cp=cp_min,
+                                                    xval=0))
+```
+
+```{r}
+# Evaluate it on the basis of tests (an exempt base)
+pBest_train <- predict(best_tree, train_combined) 
+pBest_test  <- predict(best_tree, test) 
+
+rsquared_bestTree_traincombined <- evaluation(pBest_train, train_combined$medv)
+
+# This is the assessment of our best tree in the tests base
+rsquared_bestTree_test <- evaluation(pBest_test, test$medv)
+```
+
+## 3) Random Forest
+```{r}
+# Let's now evaluate a Random Forest to compare
+set.seed(123)
+rf <- randomForest::randomForest(
+  medv ~ .,
+  data = train_combined,
+  ntree = 50
+)
+
+# Evaluate this Random Forest
+pRF_train <- predict(rf, train_combined)
+pRF_test  <- predict(rf, test)
+rsquared_rf_traincombined <- evaluation(pRF_train, train_combined$medv)
+rsquared_rf_test <- evaluation(pRF_test, test$medv)
+```
+
+## 3.1 - Improving the random-forest      
+```{r}
+# Define the hyperparameters for the grid search
+# Create the hyperparameter grid
+hyperparameters <- expand.grid(mtry = c(3, 4, 5, 6, 7, 8))
+
+# Define the control function for cross validation
+ctrl <- trainControl(method = "cv",
+                     number = 5)  
+```
+
+```{r}
+# Perform grid search with cross validation
+set.seed(123)
+gridsearch_kfold <- train(medv ~ ., 
+                          data = train_combined, 
+                          method = "rf", 
+                          trControl = ctrl, 
+                          tuneGrid = hyperparameters)
+
+# Viewing Grid Search
+print(gridsearch_kfold)
+plot(gridsearch_kfold)
+```
+
+```{r}
+# Evaluate this Random Forest
+p_rfBest <- predict(gridsearch_kfold, test)
+rsquared_gridsearch_kfold_test <- evaluation(p_rfBest, test$medv)
+
+# Creating a table of the R² models to compare
+rsquared_compared <- data.frame(
+  Models = c("R² Huge Tree", "R² Random Forest", "R² Grid Search K-Fold"),
+  R_squared_values = c(rsquared_bestTree_test, rsquared_rf_test, rsquared_gridsearch_kfold_test)
+)
+
+# Printing the R² models compared table
+print(rsquared_compared)
+```
+
