@@ -1,6 +1,8 @@
 ---
-title: "R Notebook"
-output: Deep Learning
+title: "Deep Learning"
+output:
+  pdf_document: default
+  html_notebook: default
 ---
 
 ```{r}
